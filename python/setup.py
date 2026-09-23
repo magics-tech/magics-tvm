@@ -135,6 +135,11 @@ def _remove_path(path):
             shutil.rmtree(path)
 
 
+# The libraries are copied into tvm/ below and deleted only once setup() returns,
+# and libinfo searches tvm/ before ../build. An interrupted build would otherwise
+# leave copies that fail every later build of this checkout.
+for _stale in ("libtvm.so", "libtvm_runtime.so", "standalone_crt", "microtvm_template_projects"):
+    _remove_path(os.path.join(CURRENT_DIR, "tvm", _stale))
 LIB_LIST, __version__ = get_lib_path()
 __version__ = git_describe_version(__version__)
 

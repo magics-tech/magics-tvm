@@ -17,7 +17,11 @@
 # pylint: disable=invalid-name, unused-argument
 """Arm(R) Ethos(TM)-N NPU supported operators."""
 from enum import Enum
-from distutils.version import LooseVersion
+# Python 3.12 removed distutils; this module only tests versions for equality.
+try:
+    from distutils.version import LooseVersion
+except ImportError:
+    LooseVersion = str
 
 import tvm.ir
 from tvm.relay import transform
