@@ -141,7 +141,9 @@ def _remove_path(path):
 for _stale in ("libtvm.so", "libtvm_runtime.so", "standalone_crt", "microtvm_template_projects"):
     _remove_path(os.path.join(CURRENT_DIR, "tvm", _stale))
 LIB_LIST, __version__ = get_lib_path()
-__version__ = git_describe_version(__version__)
+# Pinned, not git-describe: a describe past v0.14.0 reads 0.15.devN. Bump the
+# local label on each release.
+__version__ += "+magics.1"
 
 
 def config_cython():
