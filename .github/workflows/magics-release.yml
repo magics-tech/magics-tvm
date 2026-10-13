@@ -16,15 +16,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: magics/build.sh
         env:
           CONTAINER_ENGINE: docker
-      - uses: actions/upload-artifact@v4
+      # One file, uploaded unzipped; the artifact is named after it.
+      - uses: actions/upload-artifact@v7
         with:
-          name: wheel
           path: dist/*.whl
+          archive: false
       - name: Release
         if: github.ref_type == 'tag'
         env:
