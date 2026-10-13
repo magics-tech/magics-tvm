@@ -255,7 +255,7 @@ extras_require = {
 }
 
 setup(
-    name="tvm",
+    name="magics-tvm",
     version=__version__,
     description="TVM: An End to End Tensor IR/DSL Stack for Deep Learning Systems",
     long_description=long_description_contents(),
