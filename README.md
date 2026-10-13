@@ -15,6 +15,10 @@
 <!--- specific language governing permissions and limitations -->
 <!--- under the License. -->
 
+> **magics-tvm** is Magics' fork of Apache TVM 0.14, for Magics internal use,
+> released as the `magics-tvm` wheel. See [`magics/README.md`](magics/README.md)
+> for what differs and how to release it.
+
 <img src=https://raw.githubusercontent.com/apache/tvm-site/main/images/logo/tvm-logo-small.png width=128/> Open Deep Learning Compiler Stack
 ==============================================
 [Documentation](https://tvm.apache.org/docs) |

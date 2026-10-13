@@ -1,0 +1,42 @@
+# Builds the magics-tvm wheel with magics/build.sh. A pushed v*+magics.* tag
+# gets a GitHub release carrying it; a manual run only keeps it as an artifact.
+name: magics-release
+
+on:
+  push:
+    # `+` is a pattern operator here; `\+` matches the literal one.
+    tags: ['v*\+magics.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wheel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: magics/build.sh
+        env:
+          CONTAINER_ENGINE: docker
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+      - name: Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          wheel=$(ls dist/*.whl)
+          if [[ $(basename "$wheel") != magics_tvm-$version-* ]]; then
+            echo "::error::$wheel is not version $version; set it in python/setup.py"
+            exit 1
+          fi
+          # checkout keeps the tag lightweight; the notes are its annotation.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          gh release create "$GITHUB_REF_NAME" "$wheel" \
+            --title "magics-tvm $version" --notes-from-tag
