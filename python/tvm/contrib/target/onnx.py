@@ -98,7 +98,7 @@ def call_node_infer_type(node):
 
 def add_input(data, name, prefix, model_container):
     input_name = f"{prefix}_{name}"
-    dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[data.dtype]
+    dtype = onnx.helper.np_dtype_to_tensor_dtype(data.dtype)
     tensor_value_info = onnx.helper.make_tensor_value_info(input_name, dtype, shape=data.shape)
     model_container.add_inputs([tensor_value_info])
     data_tensor = numpy_helper.from_array(data, input_name)
@@ -632,7 +632,7 @@ class ConstantOfShapeZeros(OpConverter):
         input_names = []
         input_names.append(add_input(shape, name, "shape", model_container))
 
-        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[numpy.dtype(dtype)]
+        dtype = onnx.helper.np_dtype_to_tensor_dtype(numpy.dtype(dtype))
         tensor_value = onnx.helper.make_tensor("value", dtype, [1], [attrs["value"]])
 
         node = onnx.helper.make_node(
@@ -979,7 +979,7 @@ class RelayToONNXConverter(ExprVisitor):
         numpy_array = value.numpy()
         tensor = numpy_helper.from_array(numpy_array, param_name)
         self._mc.add_initializers([tensor])
-        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[numpy_array.dtype]
+        dtype = onnx.helper.np_dtype_to_tensor_dtype(numpy_array.dtype)
         input = onnx.helper.make_tensor_value_info(param_name, dtype, shape=numpy_array.shape)
         self._mc.add_inputs([input])
 
@@ -998,7 +998,7 @@ class RelayToONNXConverter(ExprVisitor):
             self._add_params(node_entry, idx)
         else:
             node_type = node_entry["types"][0]
-            dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[numpy.dtype(node_type.dtype)]
+            dtype = onnx.helper.np_dtype_to_tensor_dtype(numpy.dtype(node_type.dtype))
             input = onnx.helper.make_tensor_value_info(
                 node_entry["name"], dtype, shape=get_node_shape(node_type)
             )
@@ -1009,7 +1009,7 @@ class RelayToONNXConverter(ExprVisitor):
 
         for node_entry in node_entries:
             for node_type, output_name in zip(node_entry["types"], node_entry["output_names"]):
-                dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[numpy.dtype(node_type.dtype)]
+                dtype = onnx.helper.np_dtype_to_tensor_dtype(numpy.dtype(node_type.dtype))
                 output = onnx.helper.make_tensor_value_info(
                     output_name, dtype, shape=get_node_shape(node_type)
                 )

@@ -105,7 +105,7 @@ def get_type(elem_type):
         return elem_type
 
     try:
-        from onnx.mapping import TENSOR_TYPE_TO_NP_TYPE
+        from onnx.helper import tensor_dtype_to_np_dtype
     except ImportError as e:
         raise ImportError(f"Unable to import onnx which is required {e}")
 
@@ -119,7 +119,7 @@ def get_type(elem_type):
     # tvm has one, so we force the return type to be bfloat16
     if elem_type == int(TensorProto.BFLOAT16):
         return "bfloat16"
-    return str(TENSOR_TYPE_TO_NP_TYPE[elem_type])
+    return str(tensor_dtype_to_np_dtype(elem_type))
 
 
 def get_info(info_proto):
@@ -2497,11 +2497,11 @@ class Cast(OnnxOpConverter):
             attr["to"] = "bfloat16"
         else:
             try:
-                from onnx.mapping import TENSOR_TYPE_TO_NP_TYPE
+                from onnx.helper import tensor_dtype_to_np_dtype
 
-                attr["to"] = str(TENSOR_TYPE_TO_NP_TYPE[attr["to"]])
+                attr["to"] = str(tensor_dtype_to_np_dtype(attr["to"]))
             except ImportError as e:
-                raise ImportError(f"Unable to import onnx.mapping which is required {e}")
+                raise ImportError(f"Unable to import onnx.helper which is required {e}")
 
         return AttrCvt(op_name="cast", transforms={"to": "dtype"})(inputs, attr)
 

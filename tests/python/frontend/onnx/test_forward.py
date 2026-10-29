@@ -41,7 +41,7 @@ from relay.utils.tag_span import _create_span, _set_span, _verify_structural_equ
 
 import onnx
 import onnxruntime.backend
-from onnx import TensorProto, helper, mapping, numpy_helper
+from onnx import TensorProto, helper, numpy_helper
 from onnxruntime.quantization import CalibrationDataReader, quantize_static
 
 import torch
@@ -739,13 +739,13 @@ def test_gather(target, dev):
             "gather_test",
             inputs=[
                 helper.make_tensor_value_info(
-                    "in", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], list(in_shape)
+                    "in", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), list(in_shape)
                 ),
                 helper.make_tensor_value_info("indices", TensorProto.INT64, list(indices.shape)),
             ],
             outputs=[
                 helper.make_tensor_value_info(
-                    "out", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], list(out_np.shape)
+                    "out", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), list(out_np.shape)
                 )
             ],
         )
@@ -789,12 +789,12 @@ def test_dynamic_gather(target, dev):
         "gather_test",
         inputs=[
             helper.make_tensor_value_info(
-                "in", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], ["?", "?"]
+                "in", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), ["?", "?"]
             ),
         ],
         outputs=[
             helper.make_tensor_value_info(
-                "out", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], ["?"] * len(out_np.shape)
+                "out", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), ["?"] * len(out_np.shape)
             )
         ],
     )
@@ -1157,7 +1157,7 @@ def _test_onnx_op_elementwise(
 
     y = helper.make_node(opname, ["in"], ["out"], **kwargs)
 
-    ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+    ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
 
     graph = helper.make_graph(
         [y],
@@ -1312,13 +1312,13 @@ def test_gather_nd(target, dev):
             "gather_test",
             inputs=[
                 helper.make_tensor_value_info(
-                    "in", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], list(in_shape)
+                    "in", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), list(in_shape)
                 ),
                 helper.make_tensor_value_info("indices", TensorProto.INT64, list(indices.shape)),
             ],
             outputs=[
                 helper.make_tensor_value_info(
-                    "out", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], list(out_shape)
+                    "out", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), list(out_shape)
                 )
             ],
         )
@@ -1383,7 +1383,7 @@ def test_gemm(target, dev):
         a_array = np.random.uniform(size=a_shape).astype(dtype)
         b_array = np.random.uniform(size=b_shape).astype(dtype)
         input_names = ["a", "b"]
-        ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
         input_nodes = [
             helper.make_tensor_value_info("a", ONNX_DTYPE, list(a_shape)),
             helper.make_tensor_value_info("b", ONNX_DTYPE, list(b_shape)),
@@ -2045,7 +2045,7 @@ def test_constantofshape(target, dev):
             ["input"],
             ["output"],
             value=helper.make_tensor(
-                "value", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], (1,), (value,)
+                "value", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), (1,), (value,)
             ),
         )
 
@@ -2057,7 +2057,7 @@ def test_constantofshape(target, dev):
             inputs,
             outputs=[
                 helper.make_tensor_value_info(
-                    "output", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], input_dim
+                    "output", helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), input_dim
                 )
             ],
         )
@@ -2365,7 +2365,7 @@ def test_binary_ops(target, dev):
             ],
             outputs=[
                 helper.make_tensor_value_info(
-                    "out", mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(out_type)], list(out_shape)
+                    "out", helper.np_dtype_to_tensor_dtype(np.dtype(out_type)), list(out_shape)
                 )
             ],
         )
@@ -2406,7 +2406,7 @@ def test_unary_ops(target, dev):
 
     def verify_unary_ops(op, x, rtol=1e-5, atol=1e-5, dtype="float32"):
         x = x.astype(dtype)
-        ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
         out = helper.make_node(op, ["in1"], ["out"])
         graph = helper.make_graph(
             [out],
@@ -5520,9 +5520,10 @@ def test_eyelike(target, dev):
 
 onnx_test_node_dir = os.path.join(os.path.dirname(onnx.__file__), "backend", "test", "data", "node")
 
+# Newer onnx wheels no longer ship the node test data; the tests are then skipped.
 onnx_test_folders = sorted(
     dirname
-    for dirname in os.listdir(onnx_test_node_dir)
+    for dirname in (os.listdir(onnx_test_node_dir) if os.path.isdir(onnx_test_node_dir) else [])
     if dirname.startswith("test") and os.path.isdir(os.path.join(onnx_test_node_dir, dirname))
 )
 
@@ -5928,7 +5929,7 @@ def test_reverse_sequence(target, dev):
 def test_gelu(target, dev, data_type, op_name):
     """test_gelu"""
     dtype = np.dtype(data_type)
-    tensor_type = mapping.NP_TYPE_TO_TENSOR_TYPE[dtype]
+    tensor_type = helper.np_dtype_to_tensor_dtype(dtype)
     absolute_tolerance = 1e-3 if data_type == "float16" else 1e-5
 
     def verify_gelu(x):
@@ -5963,7 +5964,7 @@ def test_gelu(target, dev, data_type, op_name):
 def test_biasgelu(target, dev, data_type, op_name):
     """test_biasgelu"""
     dtype = np.dtype(data_type)
-    tensor_type = mapping.NP_TYPE_TO_TENSOR_TYPE[dtype]
+    tensor_type = helper.np_dtype_to_tensor_dtype(dtype)
     absolute_tolerance = 1e-2 if data_type == "float16" else 1e-5
 
     def verify_biasgelu(x, bias):
@@ -6867,13 +6868,13 @@ def test_qlinearmatmul(target, dev):
         else:  # "int8"
             w_array = np.random.uniform(low=-128, high=127, size=w_shape).astype("int8")
 
-        x_proto_type = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(x_dtype)]
-        w_proto_type = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(w_dtype)]
+        x_proto_type = helper.np_dtype_to_tensor_dtype(np.dtype(x_dtype))
+        w_proto_type = helper.np_dtype_to_tensor_dtype(np.dtype(w_dtype))
 
         y_dtype = "int8"
         if x_dtype == "uint8" and w_dtype == "uint8":
             y_dtype = "uint8"
-        y_proto_type = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(y_dtype)]
+        y_proto_type = helper.np_dtype_to_tensor_dtype(np.dtype(y_dtype))
 
         initializer = [
             helper.make_tensor("x_scale", TensorProto.FLOAT, (), [np.random.rand()]),
@@ -6914,9 +6915,9 @@ def test_qlinearmatmul(target, dev):
             outputs=["y"],
         )
 
-        y_proto_type = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype("int8")]
+        y_proto_type = helper.np_dtype_to_tensor_dtype(np.dtype("int8"))
         if x_dtype == "uint8" and w_dtype == "uint8":
-            y_proto_type = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype("uint8")]
+            y_proto_type = helper.np_dtype_to_tensor_dtype(np.dtype("uint8"))
 
         graph = helper.make_graph(
             [node],
@@ -7154,8 +7155,8 @@ def test_random_bernoulli(target, dev):
         freeze_params=False,
     ):
         def get_bernoulli_model(shape, in_dtype="float32", out_dtype="int32", seed=None):
-            onnx_itype = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(in_dtype)]
-            onnx_otype = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(out_dtype)]
+            onnx_itype = helper.np_dtype_to_tensor_dtype(np.dtype(in_dtype))
+            onnx_otype = helper.np_dtype_to_tensor_dtype(np.dtype(out_dtype))
             node = helper.make_node(
                 "Bernoulli",
                 ["input"],
@@ -7304,7 +7305,7 @@ def test_random_uniform(target, dev):
     """test_random_uniform"""
 
     def get_random_uniform(shape, dtype="float32", high=1.0, low=0.0, seed=None):
-        ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
         node = helper.make_node(
             "RandomUniform", [], ["out"], shape=shape, dtype=ONNX_DTYPE, high=high, low=low
         )
@@ -7377,12 +7378,12 @@ def test_random_uniform_like(target, dev):
 
         ONNX_DTYPE = None
         if dtype is not None:
-            ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+            ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
             dtype_attr = helper.make_attribute("dtype", ONNX_DTYPE)
             node.attribute.append(dtype_attr)
         else:
             dtype = input_.dtype
-            ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+            ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
 
         graph = helper.make_graph(
             [node],
@@ -7446,7 +7447,7 @@ def test_random_normal(target, dev):
     """test_random_normal"""
 
     def get_random_normal(shape, dtype="float32", scale=1.0, mean=0.0, seed=None):
-        ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
         node = helper.make_node(
             "RandomNormal", [], ["out"], shape=shape, dtype=ONNX_DTYPE, scale=scale, mean=mean
         )
@@ -7492,7 +7493,7 @@ def test_random_normal_like(target, dev):
     """test_random_normal_like"""
 
     def get_random_normal_like(input_, shape, dtype="float32", scale=1.0, mean=0.0, seed=None):
-        ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
         node = helper.make_node(
             "RandomNormalLike", ["in"], ["out"], dtype=ONNX_DTYPE, scale=scale, mean=mean
         )
@@ -7537,8 +7538,8 @@ def test_random_normal_like(target, dev):
 @tvm.testing.parametrize_targets("llvm")
 def test_multinomial(target, dev):
     def get_multinomial(input, shape, sample_size, seed=None):
-        IN_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype("float32")]
-        OUT_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype("int32")]
+        IN_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype("float32"))
+        OUT_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype("int32"))
         node = helper.make_node("Multinomial", ["in"], ["out"], sample_size=sample_size)
         if seed is not None:
             seed_attr = helper.make_attribute("seed", seed)
@@ -7598,7 +7599,7 @@ def test_convinteger(target, dev):
         x_zero_point_array = np.random.randint(0, 255, size=[1]).astype(dtype)
         w_zero_point_array = np.random.randint(0, 255, size=[1]).astype(dtype)
 
-        ONNX_DTYPE = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)]
+        ONNX_DTYPE = helper.np_dtype_to_tensor_dtype(np.dtype(dtype))
         input_nodes = [
             helper.make_tensor_value_info("x", ONNX_DTYPE, list(x_shape)),
             helper.make_tensor_value_info("w", ONNX_DTYPE, list(w_shape)),
@@ -7762,7 +7763,7 @@ def test_bitshift(target, dev):
         )
 
         # Create input and output tensors.
-        proto_type = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(in_dtype)]
+        proto_type = helper.np_dtype_to_tensor_dtype(np.dtype(in_dtype))
         graph_inputs = [
             helper.make_tensor_value_info("input", proto_type, in_shape),
             helper.make_tensor_value_info("shift_left", proto_type, shift_shape),
@@ -7839,7 +7840,7 @@ def test_bitwise(target, dev):
         )
 
         # Create input and output tensors.
-        proto_type = mapping.NP_TYPE_TO_TENSOR_TYPE[np.dtype(in_dtype)]
+        proto_type = helper.np_dtype_to_tensor_dtype(np.dtype(in_dtype))
         graph_inputs = [
             helper.make_tensor_value_info("A", proto_type, A_shape),
             helper.make_tensor_value_info("B", proto_type, B_shape),
