@@ -143,7 +143,7 @@ for _stale in ("libtvm.so", "libtvm_runtime.so", "standalone_crt", "microtvm_tem
 LIB_LIST, __version__ = get_lib_path()
 # Pinned, not git-describe: a describe past v0.14.0 reads 0.15.devN. Bump the
 # local label on each release.
-__version__ += "+magics.1"
+__version__ += "+magics.2"
 
 
 def config_cython():
