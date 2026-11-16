@@ -24,6 +24,9 @@
 #include <tvm/relay/analysis.h>
 #include <tvm/relay/op_attr_types.h>
 
+#include <algorithm>
+#include <cmath>
+
 #include "op_common.h"
 
 namespace tvm {
@@ -51,10 +54,37 @@ Expr QnnAddCanonicalize(const Attrs& attrs, const Array<Expr>& new_args,
   auto lhs_axis = broadcast_attrs->lhs_axis;
   auto rhs_axis = broadcast_attrs->rhs_axis;
 
-  // FIXME (anijain2305) - The lowering can be further optimized. Instead of inserting requantize in
-  // the start, we can insert requantize at the end if both input tensors have same qnn params. In
-  // that case, we can first add the tensors, subtract the zero point, and requantize at the end.
-  // This can be done in future.
+  auto zero_scalar = MakeConstantScalar(DataType::Int(32), 0);
+
+  // When each input scale is an integer multiple of the smaller one, min_scale, the inputs add
+  // exactly at min_scale, so the sum is requantized once and rounds once. With
+  // scale_a = r_a * min_scale and scale_b = r_b * min_scale,
+  //
+  //          scale_c * (Q_c - zp_c) = min_scale * (r_a * (Q_a - zp_a) + r_b * (Q_b - zp_b))
+  //
+  // so Q_c is r_a * (Q_a - zp_a) + r_b * (Q_b - zp_b), requantized from (min_scale, 0) to
+  // (scale_c, zp_c).
+  if (IsConstScalar(args.lhs_scale) && IsConstScalar(args.rhs_scale) &&
+      IsConstScalar(args.lhs_zero_point) && IsConstScalar(args.rhs_zero_point)) {
+    float lhs_scale = GetScalarFromConstant<float>(args.lhs_scale);
+    float rhs_scale = GetScalarFromConstant<float>(args.rhs_scale);
+    float min_scale = std::min(lhs_scale, rhs_scale);
+    double lhs_ratio = lhs_scale / min_scale;
+    double rhs_ratio = rhs_scale / min_scale;
+    // Up to 2^14, so r * (Q - zp) fits int32 even for int16 inputs
+    if (lhs_ratio == std::round(lhs_ratio) && rhs_ratio == std::round(rhs_ratio) &&
+        std::max(lhs_ratio, rhs_ratio) <= 16384) {
+      auto lhs = Multiply(Subtract(Cast(args.lhs, DataType::Int(32)), args.lhs_zero_point),
+                          MakeConstantScalar(DataType::Int(32), static_cast<int32_t>(lhs_ratio)));
+      auto rhs = Multiply(Subtract(Cast(args.rhs, DataType::Int(32)), args.rhs_zero_point),
+                          MakeConstantScalar(DataType::Int(32), static_cast<int32_t>(rhs_ratio)));
+      auto output =
+          RequantizeOrUpcast(Add(lhs, rhs), MakeConstantScalar(DataType::Float(32), min_scale),
+                             zero_scalar, args.output_scale, args.output_zero_point,
+                             input_type.shape);
+      return ConvertDtype(output, input_type.dtype);
+    }
+  }
 
   // Since the input qnn params can be different than output qnn params, we first requantize the
   // input tensors to the output qnn params. Then we call relay.add on the requantized inputs. This
@@ -83,7 +113,6 @@ Expr QnnAddCanonicalize(const Attrs& attrs, const Array<Expr>& new_args,
   auto output = Add(requantized_lhs, requantized_rhs);
 
   // Subtract zero point. Computes (Q_a' + Q_b') - zp_c
-  auto zero_scalar = MakeConstantScalar(DataType::Int(32), 0);
   if (!IsEqualScalar(args.output_zero_point, zero_scalar)) {
     output = Subtract(output, args.output_zero_point);
   }

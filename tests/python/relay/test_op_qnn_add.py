@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import pytest
 import tvm
 import numpy as np
 from tvm import relay
@@ -170,7 +171,8 @@ def test_saturation():
 
     x_data = np.array((255, 1, 1, 0)).reshape((1, 4))
     y_data = np.array((255, 255, 127, 0)).reshape((1, 4))
-    golden_output = np.array((255, 129, 65, 0)).reshape((1, 4))
+    # Same input params: the sum is requantized once, (1 + 255) / 2 = 128 exactly
+    golden_output = np.array((255, 128, 64, 0)).reshape((1, 4))
 
     op_res = relay.create_executor("graph", device=tvm.cpu(0), target="llvm").evaluate(func)(
         x_data, y_data
@@ -197,7 +199,8 @@ def test_saturation():
 
     x_data = np.array((255, 1, 1, 0)).reshape((1, 4))
     y_data = np.array((255, 255, 127, 0)).reshape((1, 4))
-    golden_output = np.array((255, 129, 65, 0)).reshape((1, 4))
+    # Same input params: the sum is requantized once, (1 + 255) / 2 = 128 exactly
+    golden_output = np.array((255, 128, 64, 0)).reshape((1, 4))
 
     op_res = relay.create_executor("graph", device=tvm.cpu(0), target="llvm").evaluate(func)(
         x_data, y_data
@@ -253,6 +256,41 @@ def test_ignore_channel_axis():
     func = relay.Function([x, y], z)
     mod = tvm.IRModule.from_expr(func)
     mod = relay.transform.InferType()(mod)
+
+
+@pytest.mark.parametrize("lhs_scale,rhs_scale", [(0.125, 0.125), (0.25, 0.125), (0.125, 0.5)])
+def test_integer_scale_ratio_requantizes_the_sum_once(lhs_scale, rhs_scale):
+    """Input scales an integer multiple of the smaller one add exactly at it, then round once."""
+    x = relay.var("x", shape=(256, 256), dtype="uint8")
+    y = relay.var("y", shape=(256, 256), dtype="uint8")
+    min_scale = min(lhs_scale, rhs_scale)
+    out_scale = 2 * min_scale
+    z = relay.qnn.op.add(
+        lhs=x,
+        rhs=y,
+        lhs_scale=relay.const(lhs_scale, "float32"),
+        lhs_zero_point=relay.const(100, "int32"),
+        rhs_scale=relay.const(rhs_scale, "float32"),
+        rhs_zero_point=relay.const(90, "int32"),
+        output_scale=relay.const(out_scale, "float32"),
+        output_zero_point=relay.const(120, "int32"),
+    )
+    mod = tvm.IRModule.from_expr(relay.Function([x, y], z))
+    mod = relay.transform.InferType()(mod)
+    mod = relay.qnn.transform.CanonicalizeOps()(mod)
+
+    # Every pair of uint8 operands
+    x_data, y_data = np.meshgrid(np.arange(256), np.arange(256))
+    x_data, y_data = x_data.astype("uint8"), y_data.astype("uint8")
+    op_res = relay.create_executor("graph", device=tvm.cpu(0), target="llvm").evaluate(
+        mod["main"]
+    )(x_data, y_data)
+
+    lhs = (x_data.astype("int64") - 100) * round(lhs_scale / min_scale)
+    rhs = (y_data.astype("int64") - 90) * round(rhs_scale / min_scale)
+    # Out scale is twice min_scale: round half up, then the output zero point
+    golden_output = np.clip(((lhs + rhs + 1) >> 1) + 120, 0, 255)
+    np.testing.assert_equal(op_res.numpy(), golden_output)
 
 
 if __name__ == "__main__":
